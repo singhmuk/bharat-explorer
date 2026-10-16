@@ -1,0 +1,30 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment: { MYSQL_DATABASE: bharat, MYSQL_USER: app, MYSQL_PASSWORD: app, MYSQL_ROOT_PASSWORD: root }
+    volumes: [mysql_data:/var/lib/mysql]
+    healthcheck: { test: ["CMD","mysqladmin","ping","-h","localhost"], interval: 5s, retries: 20 }
+  redis:
+    image: redis:7-alpine
+  api:
+    build: ./backend
+    env_file: .env
+    depends_on: { mysql: { condition: service_healthy }, redis: { condition: service_started } }
+    ports: ["8000:8000"]
+  worker:
+    build: ./backend
+    command: celery -A app.tasks.celery worker --loglevel=info --concurrency=4
+    env_file: .env
+    depends_on: [api]
+  web:
+    build: ./frontend
+    ports: ["8080:80"]
+    depends_on: [api]
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes: ["./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["9090:9090"]
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports: ["3000:3000"]
+volumes: { mysql_data: {} }
